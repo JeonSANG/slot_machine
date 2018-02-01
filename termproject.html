@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<style>
+
+    #GamePlace{
+        width : 760px;
+        float:left;
+    }
+    #Explain{
+        width : 500px;
+        height: 630px;
+        padding : 10px;
+        border : 3px solid black;
+        float:left;
+        background:#F781BE;
+    }
+    #Result{
+        height : 50px;
+        padding : 10px;
+        border : 3px solid black;
+        background:#F781BE;
+
+    }
+    .SlotsLine{
+        height : 150px;
+    }
+    #User{
+        height : 100px;
+        padding : 10px;
+        border : 3px solid black;
+        background:#F781BE;
+
+    }
+    .Slot{
+        width : 150px;
+        height : 150px;
+        border : 1px solid black;
+        float:left;
+    }
+    .SlotIMG{
+        width : 150px;
+        height : 150px;
+    }
+</style>
+
+<script>
+    /*
+        배팅 금액은 5000원 이상만 가능
+        보유 금액이 5000원 미만일 경우 종료
+        보유 금액은 10만원으로 시작함.
+     */
+
+    var Jackpot = 0;                            // 잭팟 검사 후 잭팟일 경우 해당 잭팟 번호, 아닐 경우 0
+    var Betting_Money = null;                    // 배팅한 돈
+    var My_Money = 100000;                       // 보유 금액
+    var SpinSlot_obj = new SpinSlot();           // SpinSlot의 객체로 초기화 할 속성
+    var GameStart = false;                       // 게임 start 눌렀으면 true 아니거나 Stop 누르면 false;
+    var SL_array = [];                          // 슬롯을 관리할 배열
+    var PrizeMoney = 0;                          // 당청금
+    var ExplainText =[];                         // Explain_Div 에 넣을 text 배열;
+    var PageNumber = 0;                          // Explain 창의 페이지 번호
+
+    ExplainText[0] ="<슬롯 머신 게임><br><br>" +
+
+                    "보유 금액은 기본으로<br>"+
+                    "10만원이 지급되며,<br><br>"+
+
+                    "최소 배팅 금액은 5000원입니다.<br><br>" +
+
+                    "보유 금액 보다 높은 금액은 <br>"+
+                    "배팅 하실 수 없습니다.<br><br>" +
+
+                    "보유 금액이 5000원 미만이 되면 <br>"+
+                    "더 이상 게임을 하실 수 없습니다.";
+
+    ExplainText[1] ="□□□□□        1번 잭팟 : 배팅금 * 10.0 <br>"+
+                    "■■■■■<br>"+
+                    "□□□□□<br><br>"+
+
+                    "■■■■■        2번 잭팟 : 배팅금 * 7.0 <br>"+
+                    "□□□□□<br>"+
+                    "□□□□□<br><br>"+
+
+                    "□□□□□        3번 잭팟 : 배팅금 * 7.0<br>"+
+                    "□□□□□<br>"+
+                    "■■■■■";
+
+    ExplainText[2] ="■□□□■        1번 잭팟 : 배팅금 * 10.0 <br>"+
+                    "□■□■□<br>"+
+                    "□□■□□<br><br>"+
+
+                    "□□■□□        2번 잭팟 : 배팅금 * 7.0 <br>"+
+                    "□■□■□<br>"+
+                    "■□□□■<br><br>"+
+
+                    "■□□□□        3번 잭팟 : 배팅금 * 7.0<br>"+
+                    "■□□□□<br>"+
+                    "■□□□□";
+
+    function StartGame(){
+        // Start 버튼 클릭 시 실행될 함수
+        // 배팅 금액이 5000원 이상인 경우만 게임 시작 가능, 미만일 시 경고 창 출력과 텍스트 창의 값을 지움
+        Betting_Money = document.getElementById("BettingMoney").value;              // 입력 창에서 배팅 금액을 받아옴
+        var Result_div = document.getElementById("Result");
+
+        if(GameStart == true){
+            alert("이미 시작했습니다.");
+        } else if(My_Money < 5000 || My_Money < Betting_Money){
+            alert("보유 금액이 부족합니다.")
+        } else if(Betting_Money < 5000){
+            alert("배팅은 5000이상만 가능합니다.");
+            document.getElementById("BettingMoney").value = "";
+        } else {
+            SpinSlot_obj.Start();                                               // 슬롯 돌리기
+            Jackpot = 0;                                                        // 잭팟 초기화
+            PrizeMoney = 0;                                                     // 당첨금 초기화
+            GameStart = true;
+            My_Money = My_Money - Betting_Money;                                // 보유 금액에서 배팅 금액을 뺌
+            PrtMyMoney();                                                       // 보유 금액 갱신
+
+            // 결과 창 배경색 원상 복구
+            Result_div.style = "background:#F781BE;";
+            if ( Result_div.children.length != 0){
+                for(let i = 0; i < Result_div.children.length; i++)
+                Result_div.removeChild(Result_div.children[0]);
+            }
+        }
+    }
+    function StopGame(){
+        // Stop 버튼 클릭 시 실행될 함수
+        // 슬롯 회전을 멈추고 남은 슬롯들을 검사하여 잭팟 여부를 확인
+        // 잭팟 시 result div 에 "success"와 상금을 표시, 배경은 황금색
+        // 실패 시 result div 에 "fall"과 "다음 기회에..." 라는  text 표시, 배경은 빨강
+        // 보너스 게임 시 "한번 더!" 라는 text 표시, 배경은 파랑색
+        SpinSlot_obj.Stop();
+        if(GameStart == true){
+            CheckJackpot();                                         // 잭팟 검사
+            if(Jackpot != 0){
+                // 당첨 되었을 경우 해당 잭팟에 맞는 당청금
+                switch (Jackpot){
+                    case 1: PrizeMoney = Betting_Money * 10; break;
+                    case 2: PrizeMoney = Betting_Money * 7; break;
+                    case 3: PrizeMoney = Betting_Money * 7; break;
+                    case 4: PrizeMoney = Betting_Money * 5; break;
+                    case 5: PrizeMoney = Betting_Money * 5; break;
+                    case 6: PrizeMoney = Betting_Money * 3; break;
+                }
+                My_Money += PrizeMoney;
+            }
+            PrtResult(Jackpot);                                 // 결과 출력
+            PrtMyMoney();
+            GameStart = false;
+        } else {
+            alert("게임을 시작하셔야 합니다.")
+        }
+    }
+
+    function SpinSlot(){
+        // 랜덤한 수를 받아서 그 수에 해당하는 이미지를 슬롯에 삽입
+        var SlotImg = [];
+        var Spinner;
+        var SpinCnt=0;
+
+        this.Start = function () {
+            // 속도 조절
+            Spinner = setInterval(this.Spin,100);
+        };
+        this.Stop = function () {
+            clearInterval(Spinner);
+        };
+
+        // 슬롯을 돌릴 intervalset 함수
+        this.Spin = function () {
+            // 랜덤 함수로 이미지 객체를 배열에 넣는다.
+            SlotImg[0] = Random();
+            SlotImg[1] = Random();
+            SlotImg[2] = Random();
+            SlotImg[3] = Random();
+            SlotImg[4] = Random();
+
+            SL_array[0] = document.getElementById("SlotsLine1");
+            SL_array[1] = document.getElementById("SlotsLine2");
+            SL_array[2] = document.getElementById("SlotsLine3");
+
+            if( SpinCnt%77 == 0 ){
+                // 슬롯이 77번 돌 때 마다 한번씩 한 행을 같은 그림으로 맞춤
+                var SameImg = Random();
+                SlotImg[0] = SameImg.cloneNode(false);
+                SlotImg[1] = SameImg.cloneNode(false);
+                SlotImg[2] = SameImg.cloneNode(false);
+                SlotImg[3] = SameImg.cloneNode(false);
+                SlotImg[4] = SameImg.cloneNode(false);
+                SpinCnt = 0;
+            }
+
+            for(let j = 2; j > -1; j--){
+                // 마지막 줄일 경우 이미지 객체를 삭제하고 윗 줄의 이미지를 내려 받고
+                // 2번째 줄일 경우 첫번째 줄의 이미지를 내려받고
+                // 첫번째 줄일 경우 SlotImg 배열에서 새로 생성한 이미지를 삽입한다.
+                var CloneNde = null;
+
+                if(j == 0){ // 첫번째 줄
+                    for(let i = 0; i < 5 ; i++){
+                        SL_array[0].children[i].removeChild(SL_array[0].children[i].children[0]);
+                        SL_array[0].children[i].appendChild(SlotImg[i]);
+                    }
+                } else { // 세번쨰 줄
+                    for(let i = 0; i < 5 ; i++){
+                        SL_array[j].children[i].removeChild(SL_array[j].children[i].children[0]);
+                        CloneNde = SL_array[j-1].children[i].children[0].cloneNode(false);
+                        SL_array[j].children[i].appendChild(CloneNde);
+                    }
+                }
+            } // 반복문 끝
+            SpinCnt++;
+        }// end of Spin function
+
+    }
+
+    function CheckJackpot(){
+        // 게임 결과에 잭팟이 있는지 확인한다.
+        /*
+         □□□□□       // 1번 잭팟 : 배팅금 * 10.0
+         ■■■■■
+         □□□□□
+
+         ■■■■■       // 2번 잭팟 : 배팅금 * 7.0
+         □□□□□
+         □□□□□
+
+         □□□□□       // 3번 잭팟 : 배팅금 * 7.0
+         □□□□□
+         ■■■■■
+
+         ■□□□■       // 4번 잭팟 : 배팅금 * 5.0
+         □■□■□
+         □□■□□
+
+         □□■□□       // 5번 잭팟 : 배팅금 * 5.0
+         □■□■□
+         ■□□□■
+
+         ■□□□□       // 6번 잭팟 : 배팅금 * 3.0
+         ■□□□□
+         ■□□□□
+         */
+        let SameSlot = 0;                                               // 검사에서 같은 슬롯이 있으면 +1;
+        SL_array[0] = document.getElementById("SlotsLine1");
+        SL_array[1] = document.getElementById("SlotsLine2");
+        SL_array[2] = document.getElementById("SlotsLine3");
+
+        // 1번 잭팟 확인
+        for(let i = 1; i < 5 ; i++){
+            if(SL_array[1].children[0].children[0].src == SL_array[1].children[i].children[0].src){
+                SameSlot++;
+            }
+            if(SameSlot == 4){
+                Jackpot = 1;
+                return Jackpot;
+            }
+        }
+
+        // 2번 잭팟 확인
+        SameSlot = 0;
+        for(let i = 1; i < 5 ; i++){
+            if(SL_array[0].children[0].children[0].src == SL_array[0].children[i].children[0].src){
+                SameSlot++;
+            }
+            if(SameSlot == 4){
+                Jackpot = 2;
+                return Jackpot;
+            }
+        }
+
+        // 3번 잭팟 확인
+        SameSlot = 0;
+        for(let i = 1; i < 5 ; i++){
+            if(SL_array[2].children[0].children[0].src == SL_array[2].children[i].children[0].src){
+                SameSlot++;
+            }
+            if(SameSlot == 4){
+                Jackpot = 3;
+                return Jackpot;
+            }
+        }
+        // 4번 잭팟 확인
+        if( SL_array[0].children[0].children[0].src == SL_array[0].children[4].children[0].src &&
+            SL_array[0].children[4].children[0].src == SL_array[1].children[1].children[0].src &&
+            SL_array[1].children[1].children[0].src == SL_array[1].children[3].children[0].src &&
+            SL_array[1].children[3].children[0].src == SL_array[2].children[2].children[0].src){
+            Jackpot = 4;
+            return Jackpot;
+        }
+        // 5번 잭팟 확인
+        if( SL_array[2].children[0].children[0].src == SL_array[0].children[4].children[0].src &&
+            SL_array[2].children[4].children[0].src == SL_array[1].children[1].children[0].src &&
+            SL_array[1].children[1].children[0].src == SL_array[1].children[3].children[0].src &&
+            SL_array[1].children[3].children[0].src == SL_array[0].children[2].children[0].src){
+            Jackpot = 5;
+            return Jackpot;
+        }
+
+        // 6번 잭팟 확인
+        if(SL_array[0].children[0].children[0].src == SL_array[1].children[0].children[0].src &&
+            SL_array[1].children[0].children[0].src == SL_array[2].children[0].children[0].src){
+            // 1열 확인
+            Jackpot = 6;
+            return Jackpot;
+        } else if(SL_array[0].children[1].children[0].src == SL_array[1].children[1].children[0].src &&
+            SL_array[1].children[1].children[0].src == SL_array[2].children[1].children[0].src){
+            // 2열 확인
+            Jackpot = 6;
+            return Jackpot;
+        } else if(SL_array[0].children[2].children[0].src == SL_array[1].children[2].children[0].src &&
+            SL_array[1].children[2].children[0].src == SL_array[2].children[2].children[0].src){
+            // 3열 확인
+            Jackpot = 6;
+            return Jackpot;
+        } else if(SL_array[0].children[3].children[0].src == SL_array[1].children[3].children[0].src &&
+            SL_array[1].children[3].children[0].src == SL_array[2].children[3].children[0].src){
+            // 4열 확인
+            Jackpot = 6;
+            return Jackpot;
+        } else if(SL_array[0].children[4].children[0].src == SL_array[1].children[4].children[0].src &&
+            SL_array[1].children[4].children[0].src == SL_array[2].children[4].children[0].src){
+            // 5열 확인
+            Jackpot = 6;
+            return Jackpot;
+        }
+
+    }
+
+    function Random() {
+        // 0~8 까지 수 중 랜덤한 수와 맞는 이미지 객체를 반환한다.
+        // 0 : 나연, 1 : 정연, 2 : 모모
+        // 3 : 사나, 4 : 지효, 5 : 미나
+        // 6 : 다현, 7 : 채영, 8 : 쯔위
+        var R_Number = Math.floor(Math.random()*10 %9);
+        var Img = document.createElement("img");
+
+        switch(R_Number){
+            case 0 : Img.src = "나연.jpg"; break;
+            case 1 : Img.src = "정연.jpg"; break;
+            case 2 : Img.src = "모모.jpg"; break;
+            case 3 : Img.src = "사나.jpg"; break;
+            case 4 : Img.src = "지효.jpg"; break;
+            case 5 : Img.src = "미나.jpg"; break;
+            case 6 : Img.src = "다현.jpg"; break;
+            case 7 : Img.src = "채영.jpg"; break;
+            case 8 : Img.src = "쯔위.jpg"; break;
+        }
+        Img.classList.add("SlotIMG");
+        return Img;
+    }
+
+    function PrtMyMoney() {
+        // 보유 금액의 변화를 갱신 할 함수
+
+        // 보유 금액 수정 값으로 표시하기
+        var MyMoney_div = document.getElementById("MyMoney");
+        let H1Obj = document.createElement("h1");
+
+        H1Obj.style ="font-size: 25px; float:left";
+        H1Obj.innerHTML = My_Money;
+
+        MyMoney_div.removeChild(MyMoney_div.childNodes[0]);
+        MyMoney_div.appendChild(H1Obj);
+    }
+
+    function PrtResult(argJackPot) {
+        var Result_div = document.getElementById("Result");
+        var H1_obj = document.createElement("h1");
+
+        if(argJackPot != 0){
+            Result_div.style = "background:#FACC2E";
+            H1_obj.style="font-size: 30px; color:black";
+            H1_obj.innerHTML = "당첨! "+Jackpot+ "번 잭팟, 상금 : " + PrizeMoney + "원!";
+            Result_div.appendChild(H1_obj);
+        } else {
+            Result_div.style = "background:#424242";
+            H1_obj.style="font-size: 30px; color:#B40404";
+            H1_obj.innerHTML = "꽝! 다음 기회에...";
+            Result_div.appendChild(H1_obj);
+        }
+
+
+    }
+
+    function NextPage() {
+        if (PageNumber < 2) {
+            PageNumber++;
+            var ET_div = document.getElementById("Explain_text");
+            ET_div.innerHTML = ExplainText[PageNumber];
+        }
+    }
+
+    function PreviousPage() {
+        if (PageNumber > 0) {
+            PageNumber--;
+            var ET_div = document.getElementById("Explain_text");
+            ET_div.innerHTML = ExplainText[PageNumber];
+        }
+    }
+
+
+</script>
+<body>
+
+    <div id = "GamePlace" class = "Game">
+        <div id = "Result"  ></div>
+
+        <div id = "SlotsLine1" class ="SlotsLine">
+            <div id = slot11 class ="Slot"><img src="다현.jpg" class = "SlotIMG"></div>
+            <div id = slot12 class ="Slot"><img src="모모.jpg" class = "SlotIMG"></div>
+            <div id = slot13 class ="Slot"><img src="지효.jpg" class = "SlotIMG"></div>
+            <div id = slot14 class ="Slot"><img src="모모.jpg" class = "SlotIMG"></div>
+            <div id = slot15 class ="Slot"><img src="쯔위.jpg" class = "SlotIMG"></div>
+        </div>
+
+        <div id = "SlotsLine2" class ="SlotsLine">
+            <div id = slot21 class ="Slot"><img src="다현.jpg" class = "SlotIMG"></div>
+            <div id = slot22 class ="Slot"><img src="정연.jpg" class = "SlotIMG"></div>
+            <div id = slot23 class ="Slot"><img src="모모.jpg" class = "SlotIMG"></div>
+            <div id = slot24 class ="Slot"><img src="나연.jpg" class = "SlotIMG"></div>
+            <div id = slot25 class ="Slot"><img src="채영.jpg" class = "SlotIMG"></div>
+        </div>
+
+        <div id = "SlotsLine3" class ="SlotsLine">
+            <div id = slot31 class ="Slot"><img src="사나.jpg" class = "SlotIMG"></div>
+            <div id = slot32 class ="Slot"><img src="다현.jpg" class = "SlotIMG"></div>
+            <div id = slot33 class ="Slot"><img src="나연.jpg" class = "SlotIMG"></div>
+            <div id = slot34 class ="Slot"><img src="정연.jpg" class = "SlotIMG"></div>
+            <div id = slot35 class ="Slot"><img src="미나.jpg" class = "SlotIMG"></div>
+        </div>
+
+        <div id = "User" >
+            <h1 style ="font-size: 25px; float:left; color:yellow">보유 금액 :&nbsp</h1>
+            <div id = "MyMoney" style ="float:left"><h1 style ="font-size: 25px; float:left">100000 </h1></div>
+
+            <h1 style ="font-size: 25px; float:left; color:yellow"> &nbsp배팅 금액&nbsp </h1>
+            <input type = "text" id="BettingMoney" size="20" style=" height:40px; vertical-align:middle" >
+
+            <div style="float:right">
+                <input type = "button" id = "Start" value="start" onclick="StartGame()"
+                       style ="width: 100px;height:100px;font-size: 25px">
+                <input type ="button" id = "Stop" value ="stop" onclick="StopGame()"
+                       style ="width: 100px;height:100px;font-size: 25px">
+            </div>
+        </div>
+
+    </div>
+
+    <div id = "Explain" class="Game" >
+        <h1 style="background: white" align="center">Explain</h1>
+        <div id = "Explain_text"  style="background: white; width:460px; height:490px; margin:0 auto; font-size: 25px"  >
+            <슬롯 머신 게임><br><br>
+
+            보유 금액은 기본으로<br>
+            10만원이 지급되며,<br><br>
+
+            최소 배팅 금액은 5000원입니다.<br><br>
+
+            보유 금액 보다 높은 금액은 <br>
+            배팅 하실 수 없습니다.<br><br>
+
+            보유 금액이 5000원 미만이 되면 <br>
+            더 이상 게임을 하실 수 없습니다.
+        </div>
+        <br>
+        <input type = "button" id = "Next" value="Next" onclick="NextPage()"
+               style ="width: 50px; height:30px; float:right ">
+        <input type ="button" id = "Pre" value ="Pre" onclick="PreviousPage()"
+               style ="width: 50px; height:30px; float:right ">
+    </div>
+
+</body>
+</html>
